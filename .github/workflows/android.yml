@@ -1,0 +1,66 @@
+name: Build SmartDiagnosticApp APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract project ZIP
+        run: |
+          mkdir -p project
+          unzip -q SmartDiagnosticApp_PhoneBuild.zip -d project
+
+          SETTINGS_FILE=$(find project -name "settings.gradle" -type f | head -n 1)
+
+          if [ -z "$SETTINGS_FILE" ]; then
+            echo "ERROR: settings.gradle was not found"
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$SETTINGS_FILE")
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
+
+          echo "Project found at: $PROJECT_DIR"
+          ls -la "$PROJECT_DIR"
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK
+        run: |
+          yes | sdkmanager --licenses || true
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+
+      - name: Build Debug APK
+        working-directory: ${{ env.PROJECT_DIR }}
+        run: |
+          gradle assembleDebug --no-daemon
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SmartDiagnosticApp-debug-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
